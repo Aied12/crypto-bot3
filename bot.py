@@ -11,7 +11,7 @@ app = Flask(__name__)
 # الصفحة الرئيسية
 @app.route('/')
 def home():
-    return "Crypto Bot is Running Live 24/7! 🚀"
+    return "Crypto SMC Bot is Running Live 24/7! 🚀"
 
 # مسار اختبار التيليجرام الفوري
 @app.route('/test-telegram')
@@ -22,7 +22,7 @@ def test_telegram():
     if not token or not chat_id:
         return "❌ خطأ: متغيرات البيئة الخاصة بتيليجرام غير موجودة."
 
-    message = "🧪 *اختبار ناجح!*\nبوت تداول الكريبتو يعمل بنجاح ومبتصل بتيليجرام 🚀"
+    message = "🧪 *اختبار ناجح!*\nبوت تداول SMC Long يعمل بنجاح ومبتصل بتيليجرام 🚀"
     
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
@@ -58,11 +58,14 @@ def fetch_binance_klines(symbol, interval="1h", limit=100):
         pass
     return None
 
-# حساب المؤشرات الفنية
-def calculate_indicators(df):
+# حساب المؤشرات الفنية ومنطق الـ SMC
+def calculate_smc_indicators(df):
     df['EMA_9'] = df['close'].ewm(span=9, adjust=False).mean()
     typical_price = (df['high'] + df['low'] + df['close']) / 3
     df['VWAP'] = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+    
+    # متوسط حجم التداول لآخر 20 شمعة لاكتشاف السيولة العالية
+    df['Vol_SMA20'] = df['volume'].rolling(window=20).mean()
     return df
 
 # إرسال رسائل التنبيه
@@ -84,7 +87,7 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"Telegram error: {e}")
 
-# فحص السوق والتنبيه عند تحقق الشروط القوية
+# فحص السوق للبحث عن إشارات SMC Long حصراً
 def scan_market():
     symbols = [
         "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT",
@@ -94,68 +97,63 @@ def scan_market():
         "JUPUSDT", "PYTHUSDT", "STRKUSDT", "MANTAUSDT", "ALTUSDT", "PORTALUSDT", "AXLUSDT", "ETHFIUSDT", "ENAUSDT", "BBUSDT",
         "NOTUSDT", "IOUSDT", "ZKUSDT", "ZROUSDT", "BLUMUSDT", "DOGSUSDT", "CATIUSDT", "HMSTRUSDT", "EIGENUSDT", "SCRUSDT",
         "APEUSDT", "MANAUSDT", "SANDUSDT", "AXSUSDT", "GALAUSDT", "CHZUSDT", "ENJUSDT", "FLOWUSDT", "FTMUSDT", "ALGOUSDT",
-        "VETUSDT", "THETAUSDT", "EGLDUSDT", "XTZUSDT", "EOSUSDT", "SANDUSDT", "KAVAUSDT", "CRVUSDT", "SNXUSDT", "COMPUSDT",
-        "MKRUSDT", "AAVEUSDT", "CAKEUSDT", "SUSHIUSDT", "1INCHUSDT", "ZRXUSDT", "BATUSDT", "ZILUSDT", "IOSTUSDT", "ONTUSDT",
-        "QTUMUSDT", "ICXUSDT", "NEOUSDT", "DASHUSDT", "ZECUSDT", "XEMUSDT", "WAVESUSDT", "LRCUSDT", "SNXUSDT", "YFIUSDT",
-        "UMAUSDT", "BALUSDT", "RSRUSDT", "OCEANUSDT", "RENUSDT", "KNCUSDT", "STORJUSDT", "ANTUSDT", "CRVUSDT", "SANDUSDT",
-        "LUNAUSDT", "LUNCUSDT", "USTCUSDT", "SHIBUSDT", "DOGEUSDT", "TRXUSDT", "XLMUSDT", "XRPUSDT", "EOSUSDT", "XTZUSDT",
-        "ATOMUSDT", "VETUSDT", "THETAUSDT", "ALGOUSDT", "FILUSDT", "TRBUSDT", "RLCUSDT", "NEIROUSDT", "TURBOUSDT", "COWUSDT",
-        "PNUTUSDT", "ACTUSDT", "GOATUSDT", "MOODENGUSDT", "HIPPOUSDT", "CHILLGUYUSDT", "USUALUSDT", "THEUSDT", "PENGUUSDT",
-        "VIRTUALUSDT", "AI16ZUSDT", "FARTCOINUSDT", "SPXUSDT", "MELANIAUSDT", "TRUMPUSDT", "BOMEUSDT", "MEUSDT", "SONICUSDT",
-        "BERAUSDT", "IPUSDT", "KAIAUSDT", "SPLUSDT", "PUFFERUSDT", "SCRTUSDT", "MBOXUSDT", "STGUSDT", "RDNTUSDT", "GMXUSDT",
-        "JOEUSDT", "PERPUSDT", "SPELLUSDT", "MAGICUSDT", "SSVUSDT", "LDOUSDT", "FXSUSDT", "LQTYUSDT", "AGIXUSDT", "OCEANUSDT",
-        "NMRUSDT", "BANDUSDT", "API3USDT", "C98USDT", "HOOKUSDT", "HIGHUSDT", "IDUSDT", "EDUUSDT", "CYBERUSDT", "MAVUSDT",
-        "ARKMUSDT", "NFPUSDT", "XAIUSDT", "PORTALUSDT", "PIXELUSDT", "AEVOUSDT", "BOMEUSDT", "ENAUSDT", "SAGAUSDT", "OMUSDT"
+        "VETUSDT", "THETAUSDT", "EGLDUSDT", "XTZUSDT", "EOSUSDT", "KAVAUSDT", "CRVUSDT", "SNXUSDT", "COMPUSDT", "MKRUSDT",
+        "AAVEUSDT", "CAKEUSDT", "SUSHIUSDT", "1INCHUSDT", "ZRXUSDT", "BATUSDT", "ZILUSDT", "IOSTUSDT", "ONTUSDT", "QTUMUSDT",
+        "ICXUSDT", "NEOUSDT", "DASHUSDT", "ZECUSDT", "XEMUSDT", "WAVESUSDT", "LRCUSDT", "YFIUSDT", "UMAUSDT", "BALUSDT",
+        "RSRUSDT", "OCEANUSDT", "RENUSDT", "KNCUSDT", "STORJUSDT", "ANTUSDT", "LUNAUSDT", "LUNCUSDT", "USTCUSDT", "TRXUSDT",
+        "XLMUSDT", "FILUSDT", "TRBUSDT", "RLCUSDT", "NEIROUSDT", "TURBOUSDT", "COWUSDT", "PNUTUSDT", "ACTUSDT", "GOATUSDT",
+        "MOODENGUSDT", "HIPPOUSDT", "CHILLGUYUSDT", "USUALUSDT", "THEUSDT", "PENGUUSDT", "VIRTUALUSDT", "AI16ZUSDT", "FARTCOINUSDT",
+        "SPXUSDT", "MELANIAUSDT", "TRUMPUSDT", "BOMEUSDT", "MEUSDT", "SONICUSDT", "BERAUSDT", "IPUSDT", "KAIAUSDT", "SPLUSDT",
+        "PUFFERUSDT", "SCRTUSDT", "MBOXUSDT", "STGUSDT", "RDNTUSDT", "GMXUSDT", "JOEUSDT", "PERPUSDT", "SPELLUSDT", "MAGICUSDT",
+        "SSVUSDT", "LDOUSDT", "FXSUSDT", "LQTYUSDT", "AGIXUSDT", "NMRUSDT", "BANDUSDT", "API3USDT", "C98USDT", "HOOKUSDT",
+        "HIGHUSDT", "IDUSDT", "EDUUSDT", "CYBERUSDT", "MAVUSDT", "ARKMUSDT", "NFPUSDT", "XAIUSDT", "PIXELUSDT", "AEVOUSDT"
     ]
     
     symbols = list(dict.fromkeys(symbols))
     
     while True:
-        print(f"--- Starting Filtered Market Scan for {len(symbols)} coins ---")
+        print(f"--- Scanning {len(symbols)} coins for SMC Long Signals ---")
         for symbol in symbols:
             df = fetch_binance_klines(symbol)
             if df is not None and not df.empty:
-                df = calculate_indicators(df)
+                df = calculate_smc_indicators(df)
                 last_row = df.iloc[-1]
-                prev_row = df.iloc[-2] # الشمعة السابقة لفحص التقاطعات
+                prev_row = df.iloc[-2]
                 
                 close_price = last_row['close']
                 ema_val = last_row['EMA_9']
                 vwap_val = last_row['VWAP']
+                volume = last_row['volume']
+                vol_sma = last_row['Vol_SMA20']
                 
-                # حساب الشروط الإيجابية (عدد الشروط المتحققة)
-                conditions_met = 0
+                # شروط إشارة SMC Long الاحترافية:
+                # 1. السعر يخترق للأعلى فوق EMA 9 أو مستمر فوقه بعزم
+                # 2. السعر فوق الـ VWAP (تدفق سيولة إيجابي)
+                # 3. حجم تداول قوي (أعلى من المتوسط بـ 1.2 مرة على الأقل) لتأكيد الاختراق
+                # 4. حدوث تقاطع صعودي للـ EMA 9 مع السعر في الشمعة الحالية أو السابقة
                 
-                # الشرط 1: السعر أعلى من EMA 9
-                if close_price > ema_val:
-                    conditions_met += 1
-                    
-                # الشرط 2: السعر أعلى من VWAP
-                if close_price > vwap_val:
-                    conditions_met += 1
-                    
-                # الشرط 3: EMA 9 أعلى من VWAP (اتجاه صعودي للمتوسطات)
-                if ema_val > vwap_val:
-                    conditions_met += 1
-                    
-                # الشرط 4: تقاطع إيجابي حدث في هذه الشمعة (السعر عبر للأعلى فوق EMA 9)
-                if prev_row['close'] <= prev_row['EMA_9'] and close_price > ema_val:
-                    conditions_met += 1
-
-                # إذا تحقق 3 شروط أو أكثر (تستطيع جعلها 4 شروط إذا أردت دقة أعلى)
-                if conditions_met >= 3:
+                is_price_above_vwap = close_price > vwap_val
+                is_price_above_ema = close_price > ema_val
+                is_volume_spike = volume > (vol_sma * 1.2) if not np.isnan(vol_sma) else True
+                
+                # تحقق تقاطع إيجابي (نقطة انطلاق الشراء - Long Entry)
+                is_bullish_cross = (prev_row['close'] <= prev_row['EMA_9']) and (close_price > ema_val)
+                
+                # إطلاق التنبيه فقط إذا توافرت الشروط وبشكل خاص التقاطع مع السيولة
+                if is_price_above_vwap and is_price_above_ema and (is_bullish_cross or is_volume_spike):
                     message = (
-                        f"🚨 *فرصة إيجابية قوية ({symbol})*\n"
-                        f"• الشروط المتحققة: `{conditions_met}/4`\n"
+                        f"🔵 *SMC Long Signal Detected!*\n\n"
+                        f"• العملة: `{symbol}`\n"
                         f"• السعر الحالي: `{close_price}`\n"
-                        f"• قيمة الـ VWAP: `{vwap_val:.4f}`\n"
-                        f"• مؤشر EMA 9: `{ema_val:.4f}`"
+                        f"• مؤشر VWAP: `{vwap_val:.4f}`\n"
+                        f"• مؤشر EMA 9: `{ema_val:.4f}`\n"
+                        f"• الحالة: `تأكيد اختراق وعزم إيجابي للصعود 🚀`"
                     )
                     print(message)
                     send_telegram_message(message)
                 
             time.sleep(1.5)
-        time.sleep(300)
+        time.sleep(300) # إعادة الفحص الكامل كل 5 دقائق
 
 # تشغيل الفحص في الخلفية
 def run_scanner_thread():
