@@ -8,36 +8,29 @@ from flask import Flask
 
 app = Flask(__name__)
 
-# الصفحة الرئيسية
 @app.route('/')
 def home():
-    return "Crypto SMC Bot is Running Live 24/7! 🚀"
+    return "Crypto SMC Scanner Bot is Running Live 24/7! 🚀"
 
-# مسار اختبار التيليجرام الفوري
 @app.route('/test-telegram')
 def test_telegram():
     token = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("CHAT_ID")
     
     if not token or not chat_id:
-        return "❌ خطأ: متغيرات البيئة الخاصة بتيليجرام غير موجودة."
+        return "❌ خطأ: متغيرات البيئة غير موجودة."
 
-    message = "🧪 *اختبار ناجح!*\nبوت تداول SMC Long يعمل بنجاح ومبتصل بتيليجرام 🚀"
-    
+    message = "🧪 *اختبار ناجح!*\nبوت فحص SMC يعمل بكفاءة تامة 🚀"
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
     try:
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code == 200:
-            return "✅ تم إرسال الرسالة إلى تيليجرام بنجاح! افحص تطبيق تيليجرام."
+            return "✅ تم إرسال رسالة الاختبار بنجاح!"
         else:
             return f"❌ خطأ من تيليجرام: {response.text}"
     except Exception as e:
-        return f"❌ حدث خطأ في الاتصال: {e}"
+        return f"❌ خطأ في الاتصال: {e}"
 
 # جلب البيانات من بينانس
 def fetch_binance_klines(symbol, interval="1h", limit=100):
@@ -58,36 +51,57 @@ def fetch_binance_klines(symbol, interval="1h", limit=100):
         pass
     return None
 
-# حساب المؤشرات الفنية ومنطق الـ SMC
-def calculate_smc_indicators(df):
-    df['EMA_9'] = df['close'].ewm(span=9, adjust=False).mean()
+# دالة احتساب شروط الـ SMC (كسر القمة الأخيرة + تدفق السيولة والـ VWAP)
+def check_smc_long(df):
+    if df is None or len(df) < 20:
+        return False, 0, 0, 0
+
+    # مؤشر VWAP
     typical_price = (df['high'] + df['low'] + df['close']) / 3
     df['VWAP'] = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
     
-    # متوسط حجم التداول لآخر 20 شمعة لاكتشاف السيولة العالية
-    df['Vol_SMA20'] = df['volume'].rolling(window=20).mean()
-    return df
+    # متوسط الحركة الأسي EMA 9
+    df['EMA_9'] = df['close'].ewm(span=9, adjust=False).mean()
 
-# إرسال رسائل التنبيه
+    # تحديد القمة الأخيرة لآخر 10 شمعات (باستثناء الشمعة الحالية) لتأكيد كسر الهيكل (MSB)
+    recent_high = df['high'].iloc[-11:-1].max()
+    
+    last_row = df.iloc[-1]
+    prev_row = df.iloc[-2]
+    
+    close_price = last_row['close']
+    vwap_val = last_row['VWAP']
+    ema_val = last_row['EMA_9']
+    
+    # شروط الـ SMC Long الصارمة:
+    # 1. السعر أغلق أعلى من قمة الشمعات السابقة (كسر هيكل صاعد / MSB)
+    is_break_structure = close_price > recent_high
+    
+    # 2. السعر فوق الـ VWAP وفوق الـ EMA 9 (تأكيد الاتجاه)
+    is_above_vwap = close_price > vwap_val
+    is_above_ema = close_price > ema_val
+    
+    # 3. شمعة خضراء قوية (الإغلاق أعلى من الافتتاح)
+    is_bullish_candle = close_price > last_row['open']
+
+    if is_break_structure and is_above_vwap and is_above_ema and is_bullish_candle:
+        return True, close_price, vwap_val, ema_val
+
+    return False, 0, 0, 0
+
 def send_telegram_message(message):
     token = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("CHAT_ID")
-    
     if not token or not chat_id:
         return
-
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
     try:
         requests.post(url, json=payload, timeout=10)
     except Exception as e:
         print(f"Telegram error: {e}")
 
-# فحص السوق للبحث عن إشارات SMC Long حصراً
+# فحص الـ 200 عملة بحثاً عن فرص الـ SMC Long الحقيقية
 def scan_market():
     symbols = [
         "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT",
@@ -112,50 +126,26 @@ def scan_market():
     symbols = list(dict.fromkeys(symbols))
     
     while True:
-        print(f"--- Scanning {len(symbols)} coins for SMC Long Signals ---")
+        print(f"--- Scanning {len(symbols)} coins for strict SMC Long ---")
         for symbol in symbols:
             df = fetch_binance_klines(symbol)
-            if df is not None and not df.empty:
-                df = calculate_smc_indicators(df)
-                last_row = df.iloc[-1]
-                prev_row = df.iloc[-2]
-                
-                close_price = last_row['close']
-                ema_val = last_row['EMA_9']
-                vwap_val = last_row['VWAP']
-                volume = last_row['volume']
-                vol_sma = last_row['Vol_SMA20']
-                
-                # شروط إشارة SMC Long الاحترافية:
-                # 1. السعر يخترق للأعلى فوق EMA 9 أو مستمر فوقه بعزم
-                # 2. السعر فوق الـ VWAP (تدفق سيولة إيجابي)
-                # 3. حجم تداول قوي (أعلى من المتوسط بـ 1.2 مرة على الأقل) لتأكيد الاختراق
-                # 4. حدوث تقاطع صعودي للـ EMA 9 مع السعر في الشمعة الحالية أو السابقة
-                
-                is_price_above_vwap = close_price > vwap_val
-                is_price_above_ema = close_price > ema_val
-                is_volume_spike = volume > (vol_sma * 1.2) if not np.isnan(vol_sma) else True
-                
-                # تحقق تقاطع إيجابي (نقطة انطلاق الشراء - Long Entry)
-                is_bullish_cross = (prev_row['close'] <= prev_row['EMA_9']) and (close_price > ema_val)
-                
-                # إطلاق التنبيه فقط إذا توافرت الشروط وبشكل خاص التقاطع مع السيولة
-                if is_price_above_vwap and is_price_above_ema and (is_bullish_cross or is_volume_spike):
-                    message = (
-                        f"🔵 *SMC Long Signal Detected!*\n\n"
-                        f"• العملة: `{symbol}`\n"
-                        f"• السعر الحالي: `{close_price}`\n"
-                        f"• مؤشر VWAP: `{vwap_val:.4f}`\n"
-                        f"• مؤشر EMA 9: `{ema_val:.4f}`\n"
-                        f"• الحالة: `تأكيد اختراق وعزم إيجابي للصعود 🚀`"
-                    )
-                    print(message)
-                    send_telegram_message(message)
+            is_match, close_price, vwap_val, ema_val = check_smc_long(df)
+            
+            if is_match:
+                message = (
+                    f"🟢 *تنبيه SMC Long مؤكد!*\n\n"
+                    f"• العملة: `{symbol}`\n"
+                    f"• السعر الحالي: `{close_price}`\n"
+                    f"• مؤشر VWAP: `{vwap_val:.4f}`\n"
+                    f"• مؤشر EMA 9: `{ema_val:.4f}`\n"
+                    f"• الحالة: `تم رصد كسر هيكل صاعد (MSB) وعزم إيجابي 🚀`"
+                )
+                print(message)
+                send_telegram_message(message)
                 
             time.sleep(1.5)
-        time.sleep(300) # إعادة الفحص الكامل كل 5 دقائق
+        time.sleep(300) # إعادة الفحص الكامل لكل العملات كل 5 دقائق
 
-# تشغيل الفحص في الخلفية
 def run_scanner_thread():
     thread = threading.Thread(target=scan_market, daemon=True)
     thread.start()
