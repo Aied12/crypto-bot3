@@ -13,7 +13,7 @@ app = Flask(__name__)
 def home():
     return "Crypto Bot is Running Live 24/7! 🚀"
 
-# مسار اختبار الليجرام الفوري
+# مسار اختبار التيليجرام الفوري
 @app.route('/test-telegram')
 def test_telegram():
     token = os.environ.get("TELEGRAM_TOKEN")
@@ -84,7 +84,7 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"Telegram error: {e}")
 
-# فحص السوق التلقائي لـ 200 عملة
+# فحص السوق والتنبيه عند تحقق الشروط القوية
 def scan_market():
     symbols = [
         "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT",
@@ -108,28 +108,54 @@ def scan_market():
         "ARKMUSDT", "NFPUSDT", "XAIUSDT", "PORTALUSDT", "PIXELUSDT", "AEVOUSDT", "BOMEUSDT", "ENAUSDT", "SAGAUSDT", "OMUSDT"
     ]
     
-    # إزالة التكرارات إن وجدت لضمان الأداء السلس
     symbols = list(dict.fromkeys(symbols))
     
     while True:
-        print(f"--- Starting Market Scan for {len(symbols)} coins ---")
+        print(f"--- Starting Filtered Market Scan for {len(symbols)} coins ---")
         for symbol in symbols:
             df = fetch_binance_klines(symbol)
             if df is not None and not df.empty:
                 df = calculate_indicators(df)
                 last_row = df.iloc[-1]
+                prev_row = df.iloc[-2] # الشمعة السابقة لفحص التقاطعات
                 
-                message = (
-                    f"🚨 *تنبيه حركة السوق ({symbol})*\n"
-                    f"• السعر الحالي: `{last_row['close']}`\n"
-                    f"• قيمة الـ VWAP: `{last_row['VWAP']:.4f}`\n"
-                    f"• مؤشر EMA 9: `{last_row['EMA_9']:.4f}`"
-                )
-                print(message)
-                send_telegram_message(message)
+                close_price = last_row['close']
+                ema_val = last_row['EMA_9']
+                vwap_val = last_row['VWAP']
                 
-            time.sleep(1.5) # فاصل زمني بسيط لتجنب حظر طلبات المنصة
-        time.sleep(300) # إعادة الفحص الكامل لكل العملات كل 5 دقائق
+                # حساب الشروط الإيجابية (عدد الشروط المتحققة)
+                conditions_met = 0
+                
+                # الشرط 1: السعر أعلى من EMA 9
+                if close_price > ema_val:
+                    conditions_met += 1
+                    
+                # الشرط 2: السعر أعلى من VWAP
+                if close_price > vwap_val:
+                    conditions_met += 1
+                    
+                # الشرط 3: EMA 9 أعلى من VWAP (اتجاه صعودي للمتوسطات)
+                if ema_val > vwap_val:
+                    conditions_met += 1
+                    
+                # الشرط 4: تقاطع إيجابي حدث في هذه الشمعة (السعر عبر للأعلى فوق EMA 9)
+                if prev_row['close'] <= prev_row['EMA_9'] and close_price > ema_val:
+                    conditions_met += 1
+
+                # إذا تحقق 3 شروط أو أكثر (تستطيع جعلها 4 شروط إذا أردت دقة أعلى)
+                if conditions_met >= 3:
+                    message = (
+                        f"🚨 *فرصة إيجابية قوية ({symbol})*\n"
+                        f"• الشروط المتحققة: `{conditions_met}/4`\n"
+                        f"• السعر الحالي: `{close_price}`\n"
+                        f"• قيمة الـ VWAP: `{vwap_val:.4f}`\n"
+                        f"• مؤشر EMA 9: `{ema_val:.4f}`"
+                    )
+                    print(message)
+                    send_telegram_message(message)
+                
+            time.sleep(1.5)
+        time.sleep(300)
 
 # تشغيل الفحص في الخلفية
 def run_scanner_thread():
