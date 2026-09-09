@@ -74,7 +74,7 @@ def scan_market():
             )
             print(message)
             # يمكنك تفعيل السطر التالي لاحقاً لإرسال التنبيهات تلقائياً لتيليجرام
-            # send_telegram_message(message)
+             send_telegram_message(message)
             
         time.sleep(1)
 
