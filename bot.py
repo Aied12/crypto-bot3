@@ -13,7 +13,7 @@ app = Flask(__name__)
 def home():
     return "Crypto Bot is Running Live 24/7! 🚀"
 
-# مسار اختبار التيليجرام الفوري
+# مسار اختبار الليجرام الفوري
 @app.route('/test-telegram')
 def test_telegram():
     token = os.environ.get("TELEGRAM_TOKEN")
@@ -40,10 +40,10 @@ def test_telegram():
         return f"❌ حدث خطأ في الاتصال: {e}"
 
 # جلب البيانات من بينانس
-def fetch_binance_klines(symbol="BTCUSDT", interval="1h", limit=100):
+def fetch_binance_klines(symbol, interval="1h", limit=100):
     url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data, columns=[
@@ -54,8 +54,8 @@ def fetch_binance_klines(symbol="BTCUSDT", interval="1h", limit=100):
             for col in ['open', 'high', 'low', 'close', 'volume']:
                 df[col] = df[col].astype(float)
             return df
-    except Exception as e:
-        print(f"Error fetching data for {symbol}: {e}")
+    except Exception:
+        pass
     return None
 
 # حساب المؤشرات الفنية
@@ -84,11 +84,35 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"Telegram error: {e}")
 
-# فحص السوق التلقائي
+# فحص السوق التلقائي لـ 200 عملة
 def scan_market():
-    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+    symbols = [
+        "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT",
+        "SHIBUSDT", "NEARUSDT", "APTUSDT", "UNIUSDT", "ICPUSDT", "RENDERUSDT", "FETUSDT", "INJUSDT", "STXUSDT", "IMXUSDT",
+        "TIAUSDT", "ARBUSDT", "OPUSDT", "POLUSDT", "ATOMUSDT", "ETCUSDT", "LTCUSDT", "BCHUSDT", "KASUSDT", "HBARUSDT",
+        "GRTUSDT", "RUNEUSDT", "SEIUSDT", "SAGAUSDT", "OMUSDT", "PENDLEUSDT", "WIFUSDT", "PEPEUSDT", "FLOKIUSDT", "BONKUSDT",
+        "JUPUSDT", "PYTHUSDT", "STRKUSDT", "MANTAUSDT", "ALTUSDT", "PORTALUSDT", "AXLUSDT", "ETHFIUSDT", "ENAUSDT", "BBUSDT",
+        "NOTUSDT", "IOUSDT", "ZKUSDT", "ZROUSDT", "BLUMUSDT", "DOGSUSDT", "CATIUSDT", "HMSTRUSDT", "EIGENUSDT", "SCRUSDT",
+        "APEUSDT", "MANAUSDT", "SANDUSDT", "AXSUSDT", "GALAUSDT", "CHZUSDT", "ENJUSDT", "FLOWUSDT", "FTMUSDT", "ALGOUSDT",
+        "VETUSDT", "THETAUSDT", "EGLDUSDT", "XTZUSDT", "EOSUSDT", "SANDUSDT", "KAVAUSDT", "CRVUSDT", "SNXUSDT", "COMPUSDT",
+        "MKRUSDT", "AAVEUSDT", "CAKEUSDT", "SUSHIUSDT", "1INCHUSDT", "ZRXUSDT", "BATUSDT", "ZILUSDT", "IOSTUSDT", "ONTUSDT",
+        "QTUMUSDT", "ICXUSDT", "NEOUSDT", "DASHUSDT", "ZECUSDT", "XEMUSDT", "WAVESUSDT", "LRCUSDT", "SNXUSDT", "YFIUSDT",
+        "UMAUSDT", "BALUSDT", "RSRUSDT", "OCEANUSDT", "RENUSDT", "KNCUSDT", "STORJUSDT", "ANTUSDT", "CRVUSDT", "SANDUSDT",
+        "LUNAUSDT", "LUNCUSDT", "USTCUSDT", "SHIBUSDT", "DOGEUSDT", "TRXUSDT", "XLMUSDT", "XRPUSDT", "EOSUSDT", "XTZUSDT",
+        "ATOMUSDT", "VETUSDT", "THETAUSDT", "ALGOUSDT", "FILUSDT", "TRBUSDT", "RLCUSDT", "NEIROUSDT", "TURBOUSDT", "COWUSDT",
+        "PNUTUSDT", "ACTUSDT", "GOATUSDT", "MOODENGUSDT", "HIPPOUSDT", "CHILLGUYUSDT", "USUALUSDT", "THEUSDT", "PENGUUSDT",
+        "VIRTUALUSDT", "AI16ZUSDT", "FARTCOINUSDT", "SPXUSDT", "MELANIAUSDT", "TRUMPUSDT", "BOMEUSDT", "MEUSDT", "SONICUSDT",
+        "BERAUSDT", "IPUSDT", "KAIAUSDT", "SPLUSDT", "PUFFERUSDT", "SCRTUSDT", "MBOXUSDT", "STGUSDT", "RDNTUSDT", "GMXUSDT",
+        "JOEUSDT", "PERPUSDT", "SPELLUSDT", "MAGICUSDT", "SSVUSDT", "LDOUSDT", "FXSUSDT", "LQTYUSDT", "AGIXUSDT", "OCEANUSDT",
+        "NMRUSDT", "BANDUSDT", "API3USDT", "C98USDT", "HOOKUSDT", "HIGHUSDT", "IDUSDT", "EDUUSDT", "CYBERUSDT", "MAVUSDT",
+        "ARKMUSDT", "NFPUSDT", "XAIUSDT", "PORTALUSDT", "PIXELUSDT", "AEVOUSDT", "BOMEUSDT", "ENAUSDT", "SAGAUSDT", "OMUSDT"
+    ]
+    
+    # إزالة التكرارات إن وجدت لضمان الأداء السلس
+    symbols = list(dict.fromkeys(symbols))
+    
     while True:
-        print("--- Starting Market Scan ---")
+        print(f"--- Starting Market Scan for {len(symbols)} coins ---")
         for symbol in symbols:
             df = fetch_binance_klines(symbol)
             if df is not None and not df.empty:
@@ -98,14 +122,14 @@ def scan_market():
                 message = (
                     f"🚨 *تنبيه حركة السوق ({symbol})*\n"
                     f"• السعر الحالي: `{last_row['close']}`\n"
-                    f"• قيمة الـ VWAP: `{last_row['VWAP']:.2f}`\n"
-                    f"• مؤشر EMA 9: `{last_row['EMA_9']:.2f}`"
+                    f"• قيمة الـ VWAP: `{last_row['VWAP']:.4f}`\n"
+                    f"• مؤشر EMA 9: `{last_row['EMA_9']:.4f}`"
                 )
                 print(message)
                 send_telegram_message(message)
                 
-            time.sleep(2)
-        time.sleep(900)
+            time.sleep(1.5) # فاصل زمني بسيط لتجنب حظر طلبات المنصة
+        time.sleep(300) # إعادة الفحص الكامل لكل العملات كل 5 دقائق
 
 # تشغيل الفحص في الخلفية
 def run_scanner_thread():
