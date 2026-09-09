@@ -1,4 +1,4 @@
 requests
 pandas==2.2.3
-https://github.com/twopirllc/pandas-ta/archive/refs/heads/master.zip
+pandas-ta==0.3.14b0
 flask
