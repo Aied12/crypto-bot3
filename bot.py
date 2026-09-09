@@ -6,14 +6,40 @@ import pandas as pd
 import numpy as np
 from flask import Flask
 
-# تعريف متغير الفلاسك الأساسي لكي يتعرف عليه Gunicorn
 app = Flask(__name__)
 
+# الصفحة الرئيسية
 @app.route('/')
 def home():
     return "Crypto Bot is Running Live 24/7! 🚀"
 
-# جلب بيانات الشموع من بينانس
+# مسار اختبار التيليجرام الفوري
+@app.route('/test-telegram')
+def test_telegram():
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("CHAT_ID")
+    
+    if not token or not chat_id:
+        return "❌ خطأ: متغيرات البيئة الخاصة بتيليجرام غير موجودة."
+
+    message = "🧪 *اختبار ناجح!*\nبوت تداول الكريبتو يعمل بنجاح ومبتصل بتيليجرام 🚀"
+    
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            return "✅ تم إرسال الرسالة إلى تيليجرام بنجاح! افحص تطبيق تيليجرام."
+        else:
+            return f"❌ خطأ من تيليجرام: {response.text}"
+    except Exception as e:
+        return f"❌ حدث خطأ في الاتصال: {e}"
+
+# جلب البيانات من بينانس
 def fetch_binance_klines(symbol="BTCUSDT", interval="1h", limit=100):
     url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
     try:
@@ -32,20 +58,19 @@ def fetch_binance_klines(symbol="BTCUSDT", interval="1h", limit=100):
         print(f"Error fetching data for {symbol}: {e}")
     return None
 
-# حساب مؤشرات VWAP و EMA 9
+# حساب المؤشرات الفنية
 def calculate_indicators(df):
     df['EMA_9'] = df['close'].ewm(span=9, adjust=False).mean()
     typical_price = (df['high'] + df['low'] + df['close']) / 3
     df['VWAP'] = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
     return df
 
-# إرسال التنبيهات عبر التيليجرام
+# إرسال رسائل التنبيه
 def send_telegram_message(message):
     token = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("CHAT_ID")
     
     if not token or not chat_id:
-        print("Telegram credentials missing in environment variables!")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -55,13 +80,11 @@ def send_telegram_message(message):
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code != 200:
-            print(f"Failed to send telegram message: {response.text}")
+        requests.post(url, json=payload, timeout=10)
     except Exception as e:
         print(f"Telegram error: {e}")
 
-# دالة فحص السوق الدورية
+# فحص السوق التلقائي
 def scan_market():
     symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
     while True:
@@ -84,10 +107,9 @@ def scan_market():
             time.sleep(2)
         time.sleep(900)
 
-# تشغيل الفحص في خلفية السيرفر
+# تشغيل الفحص في الخلفية
 def run_scanner_thread():
     thread = threading.Thread(target=scan_market, daemon=True)
     thread.start()
 
-# تشغيل الثريد عند بدء السيرفر
 run_scanner_thread()
